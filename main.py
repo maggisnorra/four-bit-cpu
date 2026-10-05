@@ -8,6 +8,7 @@ class Nibble:
     def set(self, val):
         self.value = val % 4
 
+
 class Address:
     def __init__(self, high=0, low=0):
         self.addr = ((high % 4) << 4) + low % 4
@@ -18,12 +19,14 @@ class Address:
     def set(self, high, low):
         self.addr = ((high % 4) << 4) + low % 4
 
+
 class Memory:
+    
+    memory_access_cycles: int
+    
     def __init__(self):
         pass
-    
-    def memory_access_cycles():
-        return 2
+
 
 class DataMemory(Memory):
     def read(addr: Address):
@@ -32,9 +35,11 @@ class DataMemory(Memory):
     def write(addr: Address, value: Nibble):
         pass
 
+
 class InstructionMemory(Memory):
     def read(addr: Address):
         pass
+
 
 class Cpu:
     
@@ -236,5 +241,16 @@ class Cpu:
                 case i if 0x8 <= i <= 0xF:
                     self.instr_address()
 
+
 if __name__ == "__main__":
-    pass
+    
+    data = DataMemory()
+    program = InstructionMemory()
+    
+    cpu = Cpu(data, program)
+    
+    cycle = 0
+    while True:
+        cpu.tick()
+        cycle += 1
+    
