@@ -43,3 +43,20 @@ And:
 - 1x10 is conditional branch
 - x111 is add
 - 010x is input/output
+
+NOP
+NOT
+SHL
+SHR
+OUT imm4
+IN  imm4
+LDI imm4
+ADI imm4
+JMP addr
+AND addr
+JC  addr
+LDA addr
+STA addr
+OR  addr
+JZ  addr
+ADD addr

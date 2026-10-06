@@ -1,44 +1,26 @@
-class Nibble:
-    def __init__(self, val=0):        
-        self.value = val % 4
-        
-    def get(self):
-        self.value
-        
-    def set(self, val):
-        self.value = val % 4
+from typing import Callable
 
-
-class Address:
-    def __init__(self, high=0, low=0):
-        self.addr = ((high % 4) << 4) + low % 4
-        
-    def get(self):
-        self.value
-        
-    def set(self, high, low):
-        self.addr = ((high % 4) << 4) + low % 4
-
+from data_types import Nibble, Address
 
 class Memory:
     
     memory_access_cycles: int
     
     def __init__(self):
-        pass
+        self.data = [Nibble() for _ in range(2**8)]
 
 
 class DataMemory(Memory):
-    def read(addr: Address):
-        pass
+    def read(self, addr: Address) -> Nibble:
+        return self.data[addr.get()]
     
-    def write(addr: Address, value: Nibble):
-        pass
+    def write(self, addr: Address, value: Nibble) -> None:
+        self.data[addr.get()] = value
 
 
 class InstructionMemory(Memory):
-    def read(addr: Address):
-        pass
+    def read(self, addr: Address) -> Nibble:
+        return self.data[addr.get()]
 
 
 class Cpu:
@@ -58,13 +40,14 @@ class Cpu:
     address: Address | None
     address_high: Nibble | None
     address_low: Nibble | None
+    extra_cycles: int | None
     
     def __init__(self, data: DataMemory, program: InstructionMemory):
         self.data_mem = data
         self.instr_mem = program
         
-        self.pc = 0
-        self.accumulator = 0
+        self.pc = Address()
+        self.accumulator = Nibble()
         self.carry_flag = False
         self.zero_flag = False
         
@@ -73,6 +56,7 @@ class Cpu:
         self.address = None
         self.address_high = None
         self.address_low = None
+        self.extra_cycles = None
     
     def instr_nop(self) -> None:
         """nothing"""
@@ -80,83 +64,82 @@ class Cpu:
     
     def instr_not(self) -> None:
         """bitwise NOT accumulator"""
-        self.accumulator = ~self.accumulator
+        self.accumulator = (~self.accumulator) & 0xF
         self.retire_instruction()
     
     def instr_shl(self) -> None:
         """shift accumulator left"""
-        self.accumulator = self.accumulator << 1
+        self.accumulator = (self.accumulator << 1) & 0xF
         self.retire_instruction()
     
     def instr_shr(self) -> None:
         """shift accumulator right"""
-        self.accumulator = self.accumulator >> 1
+        self.accumulator = (self.accumulator >> 1) & 0xF
         self.retire_instruction()
     
     def instr_out(self) -> None:
         """output accumulator with port as immediate"""
-        pass
+        print(self.accumulator)
         self.retire_instruction()
     
     def instr_in(self) -> None:
         """load from input to accumulator with port as immediate"""
-        pass
+        self.accumulator = Nibble(input())
         self.retire_instruction()
 
     def instr_ldi(self) -> None:
         """load an immediate to accumulator"""
-        self.accumulator = self.fetch_immediate()
+        self.accumulator = self.immediate
         self.retire_instruction()
 
     def instr_adi(self) -> None:
         """add immediate to accumulator"""
-        self.accumulator += self.fetch_immediate()
+        self.accumulator += self.immediate
         self.retire_instruction()
         
     def instr_immediate(self) -> None:
-        if self.immediate:
+        if self.immediate is None:
+            self.fetch_immediate()
+        else:
             match self.instruction:
                 case 0x4:
-                    self.instr_out()
+                    self.execute_after_cycles(4, self.instr_out)
                 case 0x5:
-                    self.instr_in()
+                    self.execute_after_cycles(4, self.instr_in)
                 case 0x6:
-                    self.instr_ldi()
+                    self.execute_after_cycles(4, self.instr_ldi)
                 case 0x7:
-                    self.instr_adi()
-        else:
-            self.fetch_immediate()
+                    self.execute_after_cycles(4, self.instr_adi)
 
     def instr_jmp(self) -> None:
         """unconditional jump"""
-        self.pc = self.fetch_address()
+        self.pc = self.address
         self.retire_instruction()
 
     def instr_and(self) -> None:
         """bitwise AND with accumulator and memory"""
-        self.accumulator &= self.load(self.fetch_address())
+        self.accumulator &= self.load(self.address)
         self.retire_instruction()
 
     def instr_jc(self) -> None:
         """jump if carry flag is set"""
-        addr = self.fetch_address()
         if self.carry_flag:
-            self.pc = addr
+            self.pc = self.address
         self.retire_instruction()
 
     def instr_lda(self) -> None:
         """load to accumulator from memory"""
-        self.accumulator = self.load(self.fetch_address())
+        self.accumulator = self.load(self.address)
         self.retire_instruction()
 
     def instr_sta(self) -> None:
         """store accumulator to memory"""
-        self.store(self.fetch_address(), self.accumulator)
+        self.store(self.address, self.accumulator)
         self.retire_instruction()
 
     def instr_or(self) -> None:
         """bitwise OR with accumulator and memory"""
-        self.accumulator |= self.load(self.fetch_address())
+        self.accumulator |= self.load(self.address)
         self.retire_instruction()
 
     def instr_jz(self) -> None:
@@ -171,43 +154,53 @@ class Cpu:
         self.retire_instruction()
             
     def instr_address(self) -> None:
-        if self.address:
+        if self.address is None:
+            self.fetch_address()
+        else:
             match self.instruction:
                 case 0x8:
-                    self.instr_jmp()
+                    self.execute_after_cycles(4, self.instr_jmp)
                 case 0x9:
-                    self.instr_and()
+                    self.execute_after_cycles(4, self.instr_and)
                 case 0xA:
-                    self.instr_jc()
+                    self.execute_after_cycles(4, self.instr_jc)
                 case 0xB:
-                    self.instr_lda()
+                    self.execute_after_cycles(4, self.instr_lda)
                 case 0xC:
-                    self.instr_sta()
+                    self.execute_after_cycles(4, self.instr_sta)
                 case 0xD:
-                    self.instr_or()
+                    self.execute_after_cycles(4, self.instr_or)
                 case 0xE:
-                    self.instr_jz()
+                    self.execute_after_cycles(4, self.instr_jz)
                 case 0xF:
-                    self.instr_add()
-        else:
-            self.fetch_address()
+                    self.execute_after_cycles(4, self.instr_add)
     
     def fetch_immediate(self) -> None:
-        self.pc += 1
+        self.pc.increment()
         self.immediate = self.instr_mem.read(self.pc)
         
     def fetch_address(self) -> None:
         """state machine"""
-        self.pc += 1
-        if self.address_high:
+        self.pc.increment()
+        if self.address_high is None:
+            self.address_high = self.instr_mem.read(self.pc)
+        else:
             self.address_low = self.instr_mem.read(self.pc)
             self.address = Address(high=self.address_high, low=self.address_low)
-        else:
-            self.address_high = self.instr_mem.read(self.pc)
     
     def fetch_instruction(self) -> None:
-        self.pc += 1
+        self.pc.increment()
         self.instruction = self.instr_mem.read(self.pc)
+    
+    def execute_after_cycles(self, cycles: int, func: Callable[[], None]):
+        """state machine"""
+        if self.extra_cycles is None:
+            self.extra_cycles = cycles
+        
+        self.extra_cycles -= 1
+        
+        if self.extra_cycles <= 0:
+            func()
         
     def retire_instruction(self) -> None:
         self.instruction = None
@@ -215,27 +208,28 @@ class Cpu:
         self.address = None
         self.address_high = None
         self.address_low = None
+        self.extra_cycles = None
     
-    def load(self, addr: Address):
-        self.data_mem.read(addr)
+    def load(self, addr: Address) -> Nibble:
+        return self.data_mem.read(addr)
 
-    def store(self, addr: Address, value: Nibble):
+    def store(self, addr: Address, value: Nibble) -> None:
         self.data_mem.write(addr, value)
                 
     def tick(self):
         """one cycle pass"""
-        if not self.instruction:
+        if self.instruction is None:
             self.fetch_instruction()
         else:
             match self.fetch_instruction():
                 case 0x0:
-                    self.instr_nop()
+                    self.execute_after_cycles(4, self.instr_nop)
                 case 0x1:
-                    self.instr_not()
+                    self.execute_after_cycles(4, self.instr_not)
                 case 0x2:
-                    self.instr_shl()
+                    self.execute_after_cycles(4, self.instr_shl)
                 case 0x3:
-                    self.instr_shr()
+                    self.execute_after_cycles(4, self.instr_shr)
                 case i if 0x4 <= i <= 0x7:
                     self.instr_immediate()
                 case i if 0x8 <= i <= 0xF:
@@ -253,4 +247,3 @@ if __name__ == "__main__":
     while True:
         cpu.tick()
         cycle += 1
-    
