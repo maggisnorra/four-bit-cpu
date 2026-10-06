@@ -24,6 +24,13 @@ def parse_number(s: str) -> int | None:
         return int(s, 0)
     except ValueError:
         return None
+    
+def is_label(s: str) -> bool:
+    return (
+        len(s) > 0
+        and (s[0].isalpha() or s[0] == "_")
+        and all(c.isalnum() or c == "_" for c in s)
+    )
 
 def assembler(asm: str) -> str:
     
@@ -38,16 +45,16 @@ def assembler(asm: str) -> str:
     
     # validate
     for i, substring in enumerate(substrings):
-        if substring in INSTRUCTION_OPCODES.keys():
+        if substring in INSTRUCTION_OPCODES:
             # instruction
             continue
         if parse_number(substring) is not None:
             # number
             continue
-        if substring[:-1].replace("_", "").isalnum() and substring[-1] == ":":
+        if is_label(substring[:-1]) and substring[-1] == ":":
             # label
             continue
-        if i > 0 and substring.replace("_", "").isalnum() and substrings[i-1] in ADDRESS_INSTRUCTIONS:
+        if i > 0 and is_label(substring) and substrings[i-1] in ADDRESS_INSTRUCTIONS:
             # label reference
             continue
         raise Exception(f"non-valid substring: {substring}")
@@ -64,11 +71,11 @@ def assembler(asm: str) -> str:
             if val is not None:
                 if not 0 <= val <= 0xFF:
                     raise Exception(f"address to large or small {val}")
-                ir += [(val >> 4) & 0xF]
-                ir += [val & 0xF]
-            elif substring.replace("_", "").isalnum():
-                ir += [substring]
-                ir += [""]
+                ir.append((val >> 4) & 0xF)
+                ir.append(val & 0xF)
+            elif is_label(substring):
+                ir.append(substring)
+                ir.append("")
             else:
                 raise Exception(f"invalid address or label: {substring}")
             address += 2
@@ -79,20 +86,20 @@ def assembler(asm: str) -> str:
             if val is not None:
                 if not 0 <= val <= 0xF:
                     raise Exception(f"immediate to large or small {val}")
-                ir += [val & 0xF]
+                ir.append(val & 0xF)
             else:
                 raise Exception(f"invalid immediate: {substring}")
             address += 1
             last_was_immediate_instr = False
             continue
-        if substring.endswith(":"):
+        if substring.endswith(":") and is_label(substring[:-1]):
             # label found
-            if substring[:-1] in labels.keys():
+            if substring[:-1] in labels:
                 raise Exception(f"duplicate label: {substring[:-1]}")
             labels[substring[:-1]] = address
             continue
-        if substring in INSTRUCTION_OPCODES.keys():
-            ir += [substring]
+        if substring in INSTRUCTION_OPCODES:
+            ir.append(substring)
             address += 1
             last_was_address_instr = substring in ADDRESS_INSTRUCTIONS
             last_was_immediate_instr = substring in IMMEDIATE_INSTRUCTIONS
@@ -110,17 +117,25 @@ def assembler(asm: str) -> str:
         
     # replace label references
     for i, substring in enumerate(ir):
-        if substring in labels.keys():
-            ir[i] = (labels[substring] >> 4) & 0xF
-            ir[i + 1] = labels[substring] & 0xF
+        if isinstance(substring, str) and substring in labels:
+            label_address = labels[substring]
+            if not 0 <= label_address <= 0xFF:
+                raise Exception(f"label outside address space: {substring}")
+            ir[i] = (label_address >> 4) & 0xF
+            ir[i + 1] = label_address & 0xF
     
     # replace with opcode and insert newline
     machine_code = ""
     for item in ir:
         if isinstance(item, str):
-            machine_code += f"{INSTRUCTION_OPCODES[item]:X}\n"
+            try:
+                machine_code += f"{INSTRUCTION_OPCODES[item]:X}\n"
+            except KeyError:
+                raise Exception(f"label never placed: {item}")
         else:
             machine_code += f"{item:X}\n"
+    
+    machine_code += "0\n" * (256 - len(ir))
             
     return machine_code
 
