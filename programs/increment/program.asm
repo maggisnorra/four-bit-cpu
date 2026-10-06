@@ -1,6 +1,6 @@
-    NOP
-    NOP
-    LDI 0x0
+NOP
+NOP
+LDI 0x0
 
 loop:
     OUT 0x0

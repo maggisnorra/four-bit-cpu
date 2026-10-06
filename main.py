@@ -12,20 +12,22 @@ class Memory:
 
 class DataMemory(Memory):
     def read(self, addr: Address) -> Nibble:
-        return self.data[addr.get()]
+        return self.data[addr.get()].copy()
     
     def write(self, addr: Address, value: Nibble) -> None:
-        self.data[addr.get()] = value
+        self.data[addr.get()] = value.copy()
 
 
 class InstructionMemory(Memory):
     def read(self, addr: Address) -> Nibble:
-        return self.data[addr.get()]
+        return self.data[addr.get()].copy()
+    
+    def set(self, instructions: list):
+        for i, instruction in enumerate(instructions):
+            self.data[i] = Nibble(instruction)
 
 
 class Cpu:
-    
-    clock_cycle: int
     
     data_mem: DataMemory
     instr_mem: InstructionMemory
@@ -64,32 +66,32 @@ class Cpu:
     
     def instr_not(self) -> None:
         """bitwise NOT accumulator"""
-        self.accumulator = (~self.accumulator) & 0xF
+        self.accumulator = ~self.accumulator
         self.retire_instruction()
     
     def instr_shl(self) -> None:
         """shift accumulator left"""
-        self.accumulator = (self.accumulator << 1) & 0xF
+        self.accumulator = self.accumulator << 1
         self.retire_instruction()
     
     def instr_shr(self) -> None:
         """shift accumulator right"""
-        self.accumulator = (self.accumulator >> 1) & 0xF
+        self.accumulator = self.accumulator >> 1
         self.retire_instruction()
     
     def instr_out(self) -> None:
         """output accumulator with port as immediate"""
-        print(self.accumulator)
+        print(self.accumulator.get(), "to", self.immediate.get())
         self.retire_instruction()
     
     def instr_in(self) -> None:
         """load from input to accumulator with port as immediate"""
-        self.accumulator = Nibble(input())
+        self.accumulator = Nibble(int(input()))
         self.retire_instruction()
 
     def instr_ldi(self) -> None:
         """load an immediate to accumulator"""
-        self.accumulator = self.immediate
+        self.accumulator = self.immediate.copy()
         self.retire_instruction()
 
     def instr_adi(self) -> None:
@@ -101,7 +103,7 @@ class Cpu:
         if self.immediate is None:
             self.fetch_immediate()
         else:
-            match self.instruction:
+            match self.instruction.get():
                 case 0x4:
                     self.execute_after_cycles(4, self.instr_out)
                 case 0x5:
@@ -113,7 +115,7 @@ class Cpu:
 
     def instr_jmp(self) -> None:
         """unconditional jump"""
-        self.pc = self.address
+        self.pc = self.address.copy()
         self.retire_instruction()
 
     def instr_and(self) -> None:
@@ -124,7 +126,7 @@ class Cpu:
     def instr_jc(self) -> None:
         """jump if carry flag is set"""
         if self.carry_flag:
-            self.pc = self.address
+            self.pc = self.address.copy()
         self.retire_instruction()
 
     def instr_lda(self) -> None:
@@ -145,7 +147,7 @@ class Cpu:
     def instr_jz(self) -> None:
         """jump if zero flag is set"""
         if self.zero_flag:
-            self.pc = self.address
+            self.pc = self.address.copy()
         self.retire_instruction()
 
     def instr_add(self) -> None:
@@ -157,7 +159,7 @@ class Cpu:
         if self.address is None:
             self.fetch_address()
         else:
-            match self.instruction:
+            match self.instruction.get():
                 case 0x8:
                     self.execute_after_cycles(4, self.instr_jmp)
                 case 0x9:
@@ -176,21 +178,21 @@ class Cpu:
                     self.execute_after_cycles(4, self.instr_add)
     
     def fetch_immediate(self) -> None:
-        self.pc.increment()
         self.immediate = self.instr_mem.read(self.pc)
+        self.pc.increment()
         
     def fetch_address(self) -> None:
         """state machine"""
-        self.pc.increment()
         if self.address_high is None:
             self.address_high = self.instr_mem.read(self.pc)
         else:
             self.address_low = self.instr_mem.read(self.pc)
-            self.address = Address(high=self.address_high, low=self.address_low)
+            self.address = Address(high=self.address_high.get(), low=self.address_low.get())
+        self.pc.increment()
     
     def fetch_instruction(self) -> None:
-        self.pc.increment()
         self.instruction = self.instr_mem.read(self.pc)
+        self.pc.increment()
     
     def execute_after_cycles(self, cycles: int, func: Callable[[], None]):
         """state machine"""
@@ -221,7 +223,7 @@ class Cpu:
         if self.instruction is None:
             self.fetch_instruction()
         else:
-            match self.fetch_instruction():
+            match self.instruction.get():
                 case 0x0:
                     self.execute_after_cycles(4, self.instr_nop)
                 case 0x1:
@@ -240,6 +242,7 @@ if __name__ == "__main__":
     
     data = DataMemory()
     program = InstructionMemory()
+    program.set([0x6, 0x3, 0x7, 0x2, 0x4, 0x1, 0x0, 0x0, 0x0, 0x8, 0x0, 0x6])
     
     cpu = Cpu(data, program)
     
