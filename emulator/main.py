@@ -6,8 +6,14 @@ class Memory:
     
     memory_access_cycles: int
     
-    def __init__(self):
+    def __init__(self, hex: str | list):
         self.data = [Nibble() for _ in range(2**8)]
+        
+        if isinstance(hex, str):
+            hex = map(lambda x: int(f"0x{x}", 0), hex.split())
+            
+        for i, instruction in enumerate(hex):
+            self.data[i] = Nibble(instruction)
 
 
 class DataMemory(Memory):
@@ -21,10 +27,6 @@ class DataMemory(Memory):
 class InstructionMemory(Memory):
     def read(self, addr: Address) -> Nibble:
         return self.data[addr.get()].copy()
-    
-    def set(self, instructions: list):
-        for i, instruction in enumerate(instructions):
-            self.data[i] = Nibble(instruction)
 
 
 class Cpu:
@@ -239,10 +241,26 @@ class Cpu:
 
 
 if __name__ == "__main__":
+    import argparse
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("program")
+    args = parser.parse_args()
     
-    data = DataMemory()
-    program = InstructionMemory()
-    program.set([0x6, 0x3, 0x7, 0x2, 0x4, 0x1, 0x0, 0x0, 0x0, 0x8, 0x0, 0x6])
+    program_directory = Path("../programs") / args.program
+    
+    data_hex_file = program_directory / "data_mem.hex"
+    program_hex_file = program_directory / "instr_mem.hex"
+
+    with data_hex_file.open() as f:
+        data_hex = f.read()
+        
+    with program_hex_file.open() as f:
+        program_hex = f.read()
+    
+    data = DataMemory(data_hex)
+    program = InstructionMemory(program_hex)
     
     cpu = Cpu(data, program)
     

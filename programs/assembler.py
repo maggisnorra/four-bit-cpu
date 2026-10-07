@@ -75,7 +75,7 @@ def assembler(asm: str) -> str:
                 ir.append(val & 0xF)
             elif is_label(substring):
                 ir.append(substring)
-                ir.append("")
+                ir.append(None)
             else:
                 raise Exception(f"invalid address or label: {substring}")
             address += 2
